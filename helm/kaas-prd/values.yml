@@ -1,0 +1,252 @@
+gitops:
+  namespace: etos-ms-product-prd
+  project: etos-ms-product
+  chartName: royalaholddelhaize/tech-nl-charts/get-internal-chart
+  chartVersion: 0.1.6
+
+services:
+  - name: service
+    image: kaasacrprd.azurecr.io/etos-ms-product-service
+
+    horizontalPodAutoscaler:
+      minReplicas: 2
+      maxReplicas: 5
+
+    port: 8000
+    useWorkloadIdentity: true
+    command:
+      - "uv"
+      - "run"
+      - "--frozen"
+      - "uvicorn"
+      - "app.main:app"
+      - "--host"
+      - "0.0.0.0"
+      - "--port"
+      - "8000"
+    env:
+      - name: APP_NAME
+        value: etos-ms-product
+      - name: ENVIRONMENT
+        value: prd
+      - name: AUTHENTICATION_CONFIG_KEY
+        value: prd
+      - name: OAUTH_SCOPE
+        value: api://spn-ahtech-prd-get-supergraph.ah.technology/main
+      - name: OAUTH_TENANT_ID
+        value: a6b169f1-592b-4329-8f33-8db8903003c7
+      - name: OAUTH_CLIENT_ID
+        value: 4d377457-1f11-4e43-a8e3-86a5705e93cc
+      - name: IMAGE_CDN_PREFIX
+        value: https://www.etos.nl/dw/image/v2/BCTN_PRD/on/demandware.static/-/Sites-etos-master-catalog/default
+
+    livenessProbe:
+      httpGet:
+        path: /healthcheck
+        port: 8000
+      initialDelaySeconds: 10
+      periodSeconds: 30
+      failureThreshold: 5
+    readinessProbe:
+      httpGet:
+        path: /healthcheck
+        port: 8000
+      initialDelaySeconds: 5
+      periodSeconds: 10
+      failureThreshold: 3
+    includePostgresSecrets: true
+
+    initContainers:
+      - name: migrate-database
+        image: kaasacrprd.azurecr.io/etos-ms-product-service
+        command:
+          - "uv"
+          - "run"
+          - "--frozen"
+          - "upgrade_database"
+        includePostgresSecrets: true
+        env:
+          - name: ENVIRONMENT
+            value: prd
+
+ingress:
+  ingressClassName: nginx
+  tls:
+    - hosts:
+        - ms-product-etos.kaas.prd.k8s.ah.technology
+      secretName: ingress-tls
+  hosts:
+    - host: ms-product-etos.kaas.prd.k8s.ah.technology
+      paths:
+        - serviceName: etos-ms-product-service
+          portNumber: 8000
+          path: /
+          pathType: Prefix
+
+cronjobs:
+  - name: load-images
+    image: "kaasacrprd.azurecr.io/etos-ms-product-service"
+    schedule: "0 4 * * *"
+    command:
+      - "uv"
+      - "run"
+      - "--frozen"
+      - "load_images"
+    includePostgresSecrets: true
+    env:
+      - name: ENVIRONMENT
+        value: prd
+      - name: AUTHENTICATION_CONFIG_KEY
+        value: prd
+      - name: MAM_API_URL
+        value: "https://mamapi.etos.nl"
+      - name: MAM_USER
+        valueFrom:
+          secretKeyRef:
+            name: etos-ms-product-mam-user
+            key: mam-user
+      - name: MAM_PASSWORD
+        valueFrom:
+          secretKeyRef:
+            name: etos-ms-product-mam-password
+            key: mam-password
+      - name: MAM_SKIP_SSL_VERIFICATION
+        value: "true"
+  - name: load-udas
+    image: "kaasacrprd.azurecr.io/etos-ms-product-service"
+    schedule: "30 3 * * *"
+    command:
+      - "uv"
+      - "run"
+      - "--frozen"
+      - "load_udas"
+    includePostgresSecrets: true
+    env:
+      - name: ENVIRONMENT
+        value: prd
+      - name: AUTHENTICATION_CONFIG_KEY
+        value: prd
+      - name: RMS_DATABASE_USER
+        valueFrom:
+          secretKeyRef:
+            name: etos-ms-product-rms-database-user
+            key: rms-database-user
+      - name: RMS_DATABASE_PASSWORD
+        valueFrom:
+          secretKeyRef:
+            name: etos-ms-product-rms-database-password
+            key: rms-database-password
+      - name: RMS_DATABASE_CONNECTION_STRING_DNS
+        valueFrom:
+          secretKeyRef:
+            name: etos-ms-product-rms-database-connection-string-dns
+            key: rms-database-connection-string-dns
+  - name: load-products-full-load
+    image: "kaasacrprd.azurecr.io/etos-ms-product-service"
+    schedule: "5 3 * * *"
+    command:
+      - "uv"
+      - "run"
+      - "--frozen"
+      - "load_products"
+    includePostgresSecrets: true
+    env:
+      - name: ENVIRONMENT
+        value: prd
+      - name: AUTHENTICATION_CONFIG_KEY
+        value: prd
+      - name: RMS_DATABASE_USER
+        valueFrom:
+          secretKeyRef:
+            name: etos-ms-product-rms-database-user
+            key: rms-database-user
+      - name: RMS_DATABASE_PASSWORD
+        valueFrom:
+          secretKeyRef:
+            name: etos-ms-product-rms-database-password
+            key: rms-database-password
+      - name: RMS_DATABASE_CONNECTION_STRING_DNS
+        valueFrom:
+          secretKeyRef:
+            name: etos-ms-product-rms-database-connection-string-dns
+            key: rms-database-connection-string-dns
+  - name: load-products-incremental
+    image: "kaasacrprd.azurecr.io/etos-ms-product-service"
+    schedule: "0 * * * *"
+    command:
+      - "uv"
+      - "run"
+      - "--frozen"
+      - "load_products_incremental"
+    includePostgresSecrets: true
+    env:
+      - name: ENVIRONMENT
+        value: prd
+      - name: AUTHENTICATION_CONFIG_KEY
+        value: prd
+      - name: RMS_DATABASE_USER
+        valueFrom:
+          secretKeyRef:
+            name: etos-ms-product-rms-database-user
+            key: rms-database-user
+      - name: RMS_DATABASE_PASSWORD
+        valueFrom:
+          secretKeyRef:
+            name: etos-ms-product-rms-database-password
+            key: rms-database-password
+      - name: RMS_DATABASE_CONNECTION_STRING_DNS
+        valueFrom:
+          secretKeyRef:
+            name: etos-ms-product-rms-database-connection-string-dns
+            key: rms-database-connection-string-dns
+      - name: RMS_CHECKPOINT_PATH
+        value: "/mnt/checkpoints/checkpoint"
+    volumes:
+      - name: etos-ms-product-checkpoints
+        persistentVolumeClaim: etos-ms-product-checkpoints
+    volumeMounts:
+      - name: etos-ms-product-checkpoints
+        mountPath: "/mnt/checkpoints"
+  - name: load-hierarchy-data-full-load
+    image: "kaasacrprd.azurecr.io/etos-ms-product-service"
+    schedule: "0 1 * * *"
+    command:
+      - "uv"
+      - "run"
+      - "--frozen"
+      - "load_hierarchy_data"
+    includePostgresSecrets: true
+    env:
+      - name: ENVIRONMENT
+        value: prd
+      - name: AUTHENTICATION_CONFIG_KEY
+        value: prd
+      - name: RMS_DATABASE_USER
+        valueFrom:
+          secretKeyRef:
+            name: etos-ms-product-rms-database-user
+            key: rms-database-user
+      - name: RMS_DATABASE_PASSWORD
+        valueFrom:
+          secretKeyRef:
+            name: etos-ms-product-rms-database-password
+            key: rms-database-password
+      - name: RMS_DATABASE_CONNECTION_STRING_DNS
+        valueFrom:
+          secretKeyRef:
+            name: etos-ms-product-rms-database-connection-string-dns
+            key: rms-database-connection-string-dns
+
+postgres:
+  name: etos-ms-product-postgres
+  size: 5Gi
+  database: etos-ms-product-postgres
+  owner: etos-ms-product-postgres
+  alert:
+    enabled: true
+    alertPriority: P3
+
+metadata:
+  supportLevel: "8x5"
+  supportAssignmentGroup: "NL-GET-Commerce-L3"
+  environment: prd

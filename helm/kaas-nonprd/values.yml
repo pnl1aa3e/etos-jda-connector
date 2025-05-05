@@ -1,0 +1,249 @@
+gitops:
+  namespace: etos-jda-connector-nonprd
+  project: etos-jda-connector
+  chartName: royalaholddelhaize/tech-nl-charts/get-internal-chart
+  chartVersion: 0.1.6
+
+services:
+  - name: service
+    image: kaasacrprd.azurecr.io/etos-jda-connector
+
+    replicas: 1
+    port: 8000
+    useWorkloadIdentity: true
+    command:
+      - "uv"
+      - "run"
+      - "--frozen"
+      - "uvicorn"
+      - "app.main:app"
+      - "--host"
+      - "0.0.0.0"
+      - "--port"
+      - "8000"
+    env:
+      - name: APP_NAME
+        value: etos-jda-connector
+      - name: ENVIRONMENT
+        value: nonprd
+      - name: AUTHENTICATION_CONFIG_KEY
+        value: nonprd
+      - name: OAUTH_SCOPE
+        value: api://spn-ahtech-nonprd-get-supergraph.ah.technology/main
+      - name: OAUTH_TENANT_ID
+        value: a6b169f1-592b-4329-8f33-8db8903003c7
+      - name: OAUTH_CLIENT_ID
+        value: 6510aa52-48bd-4dac-a66a-1c3f7064c31f
+      - name: IMAGE_CDN_PREFIX
+        value: https://staging.etos.nl/dw/image/v2/BCTN_STG/on/demandware.static/-/Sites-etos-master-catalog/default
+
+    livenessProbe:
+      httpGet:
+        path: /healthcheck
+        port: 8000
+      initialDelaySeconds: 10
+      periodSeconds: 30
+      failureThreshold: 5
+    readinessProbe:
+      httpGet:
+        path: /healthcheck
+        port: 8000
+      initialDelaySeconds: 5
+      periodSeconds: 10
+      failureThreshold: 3
+    includePostgresSecrets: true
+
+    initContainers:
+      - name: migrate-database
+        image: kaasacrprd.azurecr.io/etos-jda-connector-service
+        command:
+          - "uv"
+          - "run"
+          - "--frozen"
+          - "upgrade_database"
+        includePostgresSecrets: true
+        env:
+          - name: ENVIRONMENT
+            value: nonprd
+
+ingress:
+  ingressClassName: nginx
+  tls:
+    - hosts:
+        - ms-product-etos.kaas.nonprd.k8s.ah.technology
+      secretName: ingress-tls
+  hosts:
+    - host: ms-product-etos.kaas.nonprd.k8s.ah.technology
+      paths:
+        - serviceName: etos-jda-connector-service
+          portNumber: 8000
+          path: /
+          pathType: Prefix
+
+cronjobs:
+  - name: load-images
+    image: "kaasacrprd.azurecr.io/etos-jda-connector-service"
+    schedule: "0 4 * * 1"
+    command:
+      - "uv"
+      - "run"
+      - "--frozen"
+      - "load_images"
+    includePostgresSecrets: true
+    env:
+      - name: ENVIRONMENT
+        value: nonprd
+      - name: AUTHENTICATION_CONFIG_KEY
+        value: nonprd
+      - name: MAM_API_URL
+        value: "https://mamapi-acc.etos.nl"
+      - name: MAM_USER
+        valueFrom:
+          secretKeyRef:
+            name: etos-jda-connector-mam-user
+            key: mam-user
+      - name: MAM_PASSWORD
+        valueFrom:
+          secretKeyRef:
+            name: etos-jda-connector-mam-password
+            key: mam-password
+      - name: MAM_SKIP_SSL_VERIFICATION
+        value: "true"
+  - name: load-udas
+    image: "kaasacrprd.azurecr.io/etos-jda-connector-service"
+    schedule: "30 3 * * 1"
+    command:
+      - "uv"
+      - "run"
+      - "--frozen"
+      - "load_udas"
+    includePostgresSecrets: true
+    env:
+      - name: ENVIRONMENT
+        value: nonprd
+      - name: AUTHENTICATION_CONFIG_KEY
+        value: nonprd
+      - name: RMS_DATABASE_USER
+        valueFrom:
+          secretKeyRef:
+            name: etos-jda-connector-rms-database-user
+            key: rms-database-user
+      - name: RMS_DATABASE_PASSWORD
+        valueFrom:
+          secretKeyRef:
+            name: etos-jda-connector-rms-database-password
+            key: rms-database-password
+      - name: RMS_DATABASE_CONNECTION_STRING_DNS
+        valueFrom:
+          secretKeyRef:
+            name: etos-jda-connector-rms-database-connection-string-dns
+            key: rms-database-connection-string-dns
+  - name: load-products-full-load
+    image: "kaasacrprd.azurecr.io/etos-jda-connector-service"
+    schedule: "5 3 * * 1"
+    command:
+      - "uv"
+      - "run"
+      - "--frozen"
+      - "load_products"
+    includePostgresSecrets: true
+    env:
+      - name: ENVIRONMENT
+        value: nonprd
+      - name: AUTHENTICATION_CONFIG_KEY
+        value: nonprd
+      - name: RMS_DATABASE_USER
+        valueFrom:
+          secretKeyRef:
+            name: etos-jda-connector-rms-database-user
+            key: rms-database-user
+      - name: RMS_DATABASE_PASSWORD
+        valueFrom:
+          secretKeyRef:
+            name: etos-jda-connector-rms-database-password
+            key: rms-database-password
+      - name: RMS_DATABASE_CONNECTION_STRING_DNS
+        valueFrom:
+          secretKeyRef:
+            name: etos-jda-connector-rms-database-connection-string-dns
+            key: rms-database-connection-string-dns
+  - name: load-products-incremental
+    image: "kaasacrprd.azurecr.io/etos-jda-connector-service"
+    schedule: "0 * * * *"
+    command:
+      - "uv"
+      - "run"
+      - "--frozen"
+      - "load_products_incremental"
+    includePostgresSecrets: true
+    env:
+      - name: ENVIRONMENT
+        value: nonprd
+      - name: AUTHENTICATION_CONFIG_KEY
+        value: nonprd
+      - name: RMS_DATABASE_USER
+        valueFrom:
+          secretKeyRef:
+            name: etos-jda-connector-rms-database-user
+            key: rms-database-user
+      - name: RMS_DATABASE_PASSWORD
+        valueFrom:
+          secretKeyRef:
+            name: etos-jda-connector-rms-database-password
+            key: rms-database-password
+      - name: RMS_DATABASE_CONNECTION_STRING_DNS
+        valueFrom:
+          secretKeyRef:
+            name: etos-jda-connector-rms-database-connection-string-dns
+            key: rms-database-connection-string-dns
+      - name: RMS_CHECKPOINT_PATH
+        value: "/mnt/checkpoints/checkpoint"
+    volumes:
+      - name: etos-jda-connector-checkpoints
+        persistentVolumeClaim: etos-jda-connector-checkpoints
+    volumeMounts:
+      - name: etos-jda-connector-checkpoints
+        mountPath: "/mnt/checkpoints"
+  - name: load-hierarchy-data-full-load
+    image: "kaasacrprd.azurecr.io/etos-jda-connector-service"
+    schedule: "0 1 * * *"
+    command:
+      - "uv"
+      - "run"
+      - "--frozen"
+      - "load_hierarchy_data"
+    includePostgresSecrets: true
+    env:
+      - name: ENVIRONMENT
+        value: nonprd
+      - name: AUTHENTICATION_CONFIG_KEY
+        value: nonprd
+      - name: RMS_DATABASE_USER
+        valueFrom:
+          secretKeyRef:
+            name: etos-jda-connector-rms-database-user
+            key: rms-database-user
+      - name: RMS_DATABASE_PASSWORD
+        valueFrom:
+          secretKeyRef:
+            name: etos-jda-connector-rms-database-password
+            key: rms-database-password
+      - name: RMS_DATABASE_CONNECTION_STRING_DNS
+        valueFrom:
+          secretKeyRef:
+            name: etos-jda-connector-rms-database-connection-string-dns
+            key: rms-database-connection-string-dns
+
+postgres:
+  name: etos-jda-connector-postgres
+  size: 1Gi
+  database: etos-jda-connector-postgres
+  owner: etos-jda-connector-postgres
+  alert:
+    enabled: true
+    alertPriority: P4
+
+metadata:
+  supportLevel: "8x5"
+  supportAssignmentGroup: "NL-GET-Commerce-L3"
+  environment: nonprd

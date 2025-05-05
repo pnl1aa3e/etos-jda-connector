@@ -1,0 +1,43 @@
+[project]
+name = "service"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "aerich[toml]>=0.8.2",
+    "app>=0.0.1",
+    "asyncpg>=0.30.0",
+    "azure-identity>=1.21.0",
+    "beanie>=1.29.0",
+    "cx-oracle>=8.3.0",
+    "fastapi-azure-auth>=5.1.1",
+    "fastapi[standard]>=0.115.12",
+    "graphqlclient>=0.2.4",
+    "httpx>=0.28.1",
+    "motor>=3.7.0",
+    "oracledb>=3.1.0",
+    "orjson>=3.10.18",
+    "pydantic-settings>=2.9.1",
+    "python-dotenv>=1.1.0",
+    "requests>=2.32.3",
+    "setuptools>=80.1.0",
+    "strawberry-graphql>=0.264.0",
+    "tortoise>=0.1.1",
+    "tortoise-orm>=0.24.2",
+    "uvicorn>=0.34.1",
+]
+
+
+
+[tool.uv]
+package = true
+
+[build-system]
+requires = ["setuptools", "wheel"]
+build-backend = "setuptools.build_meta"
+
+
+[project.scripts]
+api_run = 'app.api_run:run'
+job_get_stores = 'app.jobs.job_get_stores:run'

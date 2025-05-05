@@ -1,0 +1,18 @@
+imageTag: 0.1.9
+
+externalSecret:
+  enabled: true
+  refreshInterval: 1h
+  secretRef:
+    - key: rms-database-user
+    - key: rms-database-password
+    - key: rms-database-connection-string-dns
+    - key: mam-user
+    - key: mam-password
+
+persistentVolumeClaims:
+  - name: etos-ms-product-checkpoints
+    storageClassName: azurefile
+    storage: 1Gi
+    accessModes:
+      - ReadWriteMany
